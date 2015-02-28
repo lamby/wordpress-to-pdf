@@ -24,7 +24,7 @@ class WordpressToPDF(object):
         self.options, args = parser.parse_args()
 
         if len(args) != 2:
-            parser.error()
+            parser.error("must specify an url and an output filename")
 
         self.options.base_url = args[0]
         self.options.filename = args[1]
