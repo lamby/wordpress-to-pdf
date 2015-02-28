@@ -50,7 +50,7 @@ class WordpressToPDF(object):
             break
 
     def parse(self, *args, **kwargs):
-        return etree.HTML(self.GET(*args, **kwargs).text)
+        return etree.HTML(self.GET(*args, **kwargs))
 
     def GET(self, url):
         if self.session is None:
@@ -59,7 +59,7 @@ class WordpressToPDF(object):
         response = self.session.get(url)
         response.raise_for_status()
 
-        return response
+        return response.text
 
     def setup_logging(self):
         self.log = logging.getLogger()
