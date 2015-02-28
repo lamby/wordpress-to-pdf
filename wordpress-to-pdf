@@ -1,6 +1,8 @@
 #!/usr/bin/env python
 
+import os
 import sys
+import hashlib
 import logging
 import optparse
 import requests
@@ -20,6 +22,8 @@ class WordpressToPDF(object):
         parser.add_option('--verbosity', dest='verbosity', default=0, type='int',
             help="Verbosity level; 0=minimal output, 1=normal output, "
                 "2=verbose output, 3=very verbose output")
+        parser.add_option('--cache-dir', dest='cache_dir', default=None,
+            help="Download cache dir")
 
         self.options, args = parser.parse_args()
 
@@ -53,11 +57,28 @@ class WordpressToPDF(object):
         return etree.HTML(self.GET(*args, **kwargs))
 
     def GET(self, url):
+        filename = None
+        if self.options.cache_dir is not None:
+            filename = os.path.join(
+                self.options.cache_dir,
+                'cache-%s' % hashlib.sha1(url).hexdigest(),
+            )
+
+        if filename and os.path.exists(filename):
+            self.log.info("Using cached download for %s from %s", filename, url)
+            with open(filename) as f:
+                return f.read().decode('utf8')
+
         if self.session is None:
             self.session = requests.Session()
 
         response = self.session.get(url)
         response.raise_for_status()
+
+        if filename is not None:
+            self.log.info("Caching download for %s at %s", filename, url)
+            with open(filename, 'w') as f:
+                f.write(response.text.encode('utf8'))
 
         return response.text
 
