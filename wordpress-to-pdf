@@ -6,9 +6,27 @@ import hashlib
 import logging
 import optparse
 import requests
+import tempfile
+import subprocess
 
 from lxml import etree
 from lxml.cssselect import CSSSelector
+
+STYLESHEET = """
+form,
+iframe,
+#share,
+#footer,
+#header,
+#sidebar,
+#comments,
+#topstrip,
+#content .dated,
+#comments_posting,
+div.comment {
+  display: none;
+}
+"""
 
 class WordpressToPDF(object):
     def __init__(self):
@@ -24,6 +42,8 @@ class WordpressToPDF(object):
                 "2=verbose output, 3=very verbose output")
         parser.add_option('--cache-dir', dest='cache_dir', default=None,
             help="Download cache dir")
+        parser.add_option('--wkhtmltopdf', dest='wkhtmltopdf',
+            default='/usr/bin/wkhtmltopdf', help="Location of wkhtmltopdf binary")
 
         self.options, args = parser.parse_args()
 
@@ -40,18 +60,33 @@ class WordpressToPDF(object):
         return 0
 
     def create_pdf(self):
-        archives = self.parse('%s/archives.html' % self.options.base_url)
+        page = self.parse('%s/archives.html' % self.options.base_url)
+        links = CSSSelector('div.archive-individual ul.archive-list li a')(page)
+        urls = [x.get('href') for x in reversed(links)]
 
-        for x in CSSSelector('div.archive-individual ul.archive-list li a')(archives):
-            y = self.parse(x.get('href'))
+        with tempfile.NamedTemporaryFile() as stylesheet:
+            stylesheet.write(STYLESHEET)
+            stylesheet.flush()
 
-            title = CSSSelector('div#content h1 a')(y)[0].text
-            date = CSSSelector('div#content div.dated')(y)[0].text
-            text = CSSSelector('div#content #text')(y)[0]
+            args = [
+                'wkhtmltopdf',
+                '--user-style-sheet', 'file://%s' % stylesheet.name,
+                '--allow', self.options.base_url,
+                '--disable-javascript',
+                '--no-images',
+            ]
 
-            print title, date, text
+            if self.options.cache_dir is not None:
+                args.extend([
+                    '--cache-dir',
+                    self.options.cache_dir,
+                ])
 
-            break
+            args.extend(urls)
+            args.append(self.options.filename)
+
+            self.log.info("Executing: %s", ' '.join(args))
+            subprocess.check_call(args)
 
     def parse(self, *args, **kwargs):
         return etree.HTML(self.GET(*args, **kwargs))
